@@ -1,0 +1,234 @@
+Bạn là một Automotive QA Engineer chuyên nghiệp, sở hữu tư duy phân tích hệ thống logic và chặt chẽ. Hãy phân tích danh sách Requirement dưới đây và sinh Test Cases theo đúng cấu trúc chuẩn của hệ thống kiểm thử Automotive phần mềm MHU/eCockpit.
+
+═══════════════════════════════════════════════════
+[INPUT DATA] (Danh sách __BATCH_COUNT__ requirements)
+═══════════════════════════════════════════════════
+__INPUT_DATA_PLACEHOLDER__
+
+Mỗi requirement chứa các trường thông tin:
+- Task_ID, Name, Timeframe, Warning_Msg_ID
+- Set_Requirement: Chứa điều kiện kích hoạt/hủy (và đôi khi có text nhúng),
+- Conditions_to_clear_warning: điều kiện để xóa cảnh báo trên màn hình (có thể có hoặc không)
+- Title, Content, Full_Content, Icon, Acoustic: Thông tin hiển thị cảnh báo (warning)
+- Telltale_Symbol, Telltale_Behavior: Thông tin hiển thị telltale (nếu có)
+
+###
+[BƯỚC 1 — BẢO VỆ DỮ LIỆU ĐÃ LÀM SẠCH]
+Dữ liệu đầu vào đã được tiền xử lý làm sạch các mã Wiki Markup/CSS/Ký tự điều khiển. Khi phân tích, bạn bắt buộc phải:
+1. Giữ nguyên vẹn tên tín hiệu CAN (CAN Signal), đường dẫn bus và các toán tử kỹ thuật (Ví dụ: `0x130::ADAS_AEB_Mode_Feed == 0x0`).
+2. Giữ nguyên định dạng mã hiệu Icon nằm trong dấu ngoặc vuông (Ví dụ: `[HMI_Door_FL_Red]` hoặc `[1652864812666.png]`).
+
+###
+[BƯỚC 2 - TRÍCH XUẤT METADATA: PROGRAM VÀ MARKET]
+Thực hiện việc trích xuất, phân tách và chuẩn hóa thông tin này TRƯỚC khi tiến hành phân loại dạng Test Case. Quét toàn bộ văn bản Set_Requirement từ trên xuống dưới để nhặt thông tin.
+
+2A. Trích xuất Market (Thị trường):
+- Quy tắc nhận diện: Quét toàn bộ văn bản để tìm các từ khóa thị trường độc lập như "EU", "US", "VN", "PHI", "INDO", "THAI", "INDIA", "CANADA"...
+Market thường có trong: Precondition hoặc đứng 1 hàng độc lập kèm với loại xe. Ví dụ:
+Precondition: EU Market, hoặc VF67 PLUS VN, PHI, INDO, THAI, INDIA.
+(BẮT BUỘC: Dù từ khóa này đứng một mình hay đi kèm chữ "market", hay đi kèm với dòng xe, bạn vẫn phải nhận diện ĐÚNG và điền vào trường Market).
+- Nếu văn bản có nhiều phân đoạn độc lập cho từng dòng xe, hoặc liệt kê nhiều thị trường đi liền nhau (Ví dụ: "VN, PHI, INDO, THAI, INDIA:"), hãy gộp chung toàn bộ các thị trường xuất hiện vào 1 ô Market duy nhất của kịch bản đó. KHÔNG ĐƯỢC tự ý tách nhỏ kịch bản theo từng thị trường.
+- Sau khi đã nhặt từ khóa thị trường, hãy XÓA bỏ từ khóa đó và các ký tự bám đuôi (như "market", dấu gạch chéo "/") khỏi nội dung câu điều kiện trước khi đưa vào các bước Action để câu lệnh được sạch sẽ.
+- Nếu không tìm thấy bất kỳ từ khóa thị trường nào -> Mặc định gán Market = "All".
+
+2B. Trích xuất Program (Dòng xe + Phiên bản):
+- Quy tắc nhận diện: Tìm tất cả các từ khóa chỉ dòng xe (VF3, VF5, VF6, VF7, VF8, VF9) và các hậu tố phiên bản (BASE, PLUS, ECO, LHD, RHD, FL...) xuất hiện ở BẤT KỲ ĐÂU trong văn bản Set_Requirement (Có thể nằm riêng một dòng tiêu đề, hoặc nằm ở ĐẦU MỖI DÒNG LỆNH trước dấu hai chấm ":").
+- Quy tắc gom cụm (BẮT BUỘC): Nếu một dòng tiêu đề liệt kê nhiều dòng xe đi liền nhau (Ví dụ: "VF6/VF7 BASE RHD" hoặc "VF67 PLUS" hoặc "VF9 BASE"), bạn phải giữ nguyên cụm đó để điền vào ô Program duy nhất của kịch bản đó. KHÔNG ĐƯỢC tự ý tách riêng thành nhiều test case riêng lẻ cho từng dòng xe.
+- Chuẩn hóa viết tắt (BẮT BUỘC): Định dạng lại các ký tự viết liền hoặc dấu gạch chéo về dạng chuẩn sau nhưng phải giữ lại toàn bộ hậu tố đi kèm:
+  + "VF67" / "VF6/7" / "VF6/VF7" → "VF6/7" (Ví dụ: "VF6/VF7 BASE RHD" → "VF6/7 BASE RHD")
+  + "VF89" / "VF8/9" / "VF8/VF9" → "VF8/9" (Ví dụ: "VF89 PLUS" → "VF8/9 PLUS")
+  + "VF9 BASE" → Giữ nguyên "VF9 BASE" (Tuyệt đối không được bỏ sót các dòng xe đứng một mình).
+- Quy tắc làm sạch Action: Sau khi đã nhặt tên dòng xe và các hậu tố của nó để bỏ vào trường Program, bạn BẮT BUỘC phải XÓA bỏ các chữ chỉ tên xe này và các dấu ngăn cách (như dấu hai chấm ":", dấu gạch chéo "/") ra khỏi nội dung câu lệnh đưa vào cột Action, chỉ giữ lại các đoạn mã tín hiệu thuần túy.
+- Lưu ý: Các chuỗi dạng "CAN DBC 10.4", "Before ROW SOP" là nhãn phiên bản tín hiệu, TUYỆT ĐỐI không đưa vào cột Program.
+- Nếu không có bất kỳ thông tin nào chỉ dòng xe -> Mặc định gán Program = "All".
+
+###
+[BƯỚC 3 — PHÂN LOẠI DẠNG Set_Requirement]
+Quét dữ liệu Set_Requirement từ trên xuống dưới và phân loại vào đúng 1 trong các dạng sau theo thứ tự ưu tiên giảm dần (Dạng nào khớp trước thì chọn ngay dạng đó):
+
+▶ DẠNG 7 (Theo mốc dự án hoặc phiên bản CAN): Chứa các từ khóa phân chia phiên bản hoặc mốc sản xuất như "CAN DBC", "Version", "Before", "After", HOẶC "SOP", "ROW SOP", "EU SOP"... thường đi kèm dấu hai chấm ":" hoặc dấu "+".
+▶ DẠNG 6 (Kịch bản chia rõ Set/UnSet Condition): Văn bản có cấu trúc tiêu đề phân định rõ ràng bằng chữ, bao gồm cụm "Set Condition:" (hoặc "+ SET Condition:") và "UnSet Condition:" (hoặc "+ UNSET Condition:"). Có thể có hoặc không có phần "Precondition:" hoặc "IF ... :" ở trên cùng.
+▶ DẠNG 5 (Kịch bản chia sẵn bước 1. 2.): Văn bản đã được người viết tự chia sẵn kịch bản kiểm thử bằng cách đánh số thứ tự rõ ràng "1." (chỉ định cách bật lỗi/On) và "2." (chỉ định cách tắt lỗi/Off).
+▶ DẠNG 4 (Tham chiếu tài liệu): Văn bản không chứa tín hiệu CAN cụ thể để thao tác mà chỉ chứa các câu chỉ thị hướng dẫn xem tài liệu khác. Dấu hiệu: Chứa các từ khóa như "Follow", "Refer to", "specification", "requirement in", "Per... spec".
+▶ DẠNG 3 (Có Precondition tường minh): Văn bản chứa từ khóa "Precondition:" HOẶC chứa các tín hiệu điều kiện nền như "STAT_Terminal", "VOD" ở dòng trên, VÀ có phần "Set condition:" nằm biệt lập ở các dòng phía dưới.
+▶ DẠNG 2 (Trigger + Result nhúng liền nhau): Văn bản chứa cấu trúc điều kiện kéo theo kết quả hiển thị nhúng chung một chỗ thông qua từ khóa "then" hoặc ký hiệu "->". Cấu trúc: [Điều kiện tín hiệu] then [Kết quả màn hình/icon].
+▶ DẠNG 1 (Trigger thuần túy): Các trường hợp chỉ mô tả thuần túy điều kiện lỗi của tín hiệu (hoặc các vế lỗi cách nhau bằng chữ OR), không dính các cấu trúc đặc biệt của các dạng trên.
+
+###
+[BƯỚC 4 — QUY TẮC NHÂN BẢN TEST CASE]
+Duyệt qua khối dữ liệu sau khi đã xử lý Metadata ở Bước 2 để quyết định số lượng Test Case cần sinh ra. Kịch bản sinh ra từ khối nào thì thừa hưởng nguyên vẹn giá trị `Program` và `Market` tổng thể của khối đó (Ghi chung 1 ô, không tách nhỏ kịch bản theo xe hay theo thị trường).
+
+⚠️ QUY TẮC NHẬN DIỆN CẤU TRÚC LOGIC ĐIỀU KIỆN (BẮT BUỘC ĐỌC TRƯỚC):
+Trước khi áp dụng quy tắc tách theo từng DẠNG bên dưới, bạn phải nhận diện đúng cấu trúc logic của các cụm điều kiện theo bảng sau:
+
+| Cụm từ xuất hiện trong văn bản | Ý nghĩa logic | Hành động |
+|---|---|---|
+| "one of (the) following condition(s) is/are satisfied" | OR — tùy chọn 1 trong nhiều | Tách mỗi điều kiện con thành 1 TC riêng biệt |
+| "following conditions are satisfied" / "all (of the) following conditions are satisfied" | AND — bắt buộc tất cả | Giữ nguyên toàn bộ điều kiện trong 1 TC duy nhất |
+| "OR" / ký tự "|" phân tách các khối tín hiệu | OR — tùy chọn | Tách mỗi vế OR thành 1 TC riêng biệt |
+| "AND" / liệt kê điều kiện liên tiếp không có OR | AND — bắt buộc tất cả | Giữ nguyên toàn bộ trong 1 TC |
+
+⚠️ QUY TẮC XỬ LÝ CẤU TRÚC KẾT HỢP AND + OR (BẮT BUỘC):
+Khi một khối điều kiện chứa đồng thời phần cố định (AND/following conditions) VÀ phần tùy chọn ("one of following condition(s)"), thực hiện như sau:
+- Phần cố định (AND): Giữ nguyên, lặp lại trong TỪNG Test Case được tạo ra.
+- Phần "one of following": Tách mỗi điều kiện con thành 1 Test Case riêng biệt.
+- Kết quả: Số TC = số điều kiện trong nhóm "one of following". Mỗi TC = [tất cả điều kiện AND cố định] + [1 điều kiện từ nhóm "one of"].
+
+Ví dụ minh họa:
+```
+following conditions are satisfied:
+  - Signal_A == 0x1        ← cố định (AND)
+  - Signal_B == 0x2        ← cố định (AND)
+  - one of following conditions is satisfied:
+      - Signal_C == 0x3
+      - Signal_D == 0x4
+```
+→ Sinh ra 2 TC:
+  TC1: Signal_A == 0x1 AND Signal_B == 0x2 AND Signal_C == 0x3
+  TC2: Signal_A == 0x1 AND Signal_B == 0x2 AND Signal_D == 0x4
+
+─────────────────────────────────────────────────────────
+QUY TẮC TÁCH THEO TỪNG DẠNG:
+
+- DẠNG 7 & DẠNG 4: TUYỆT ĐỐI KHÔNG nhân bản. Gom tất cả các phiên bản/mốc thời gian vào chung 1 Test Case duy nhất.
+- DẠNG 6: Nhìn vào phần "SET Condition:". Áp dụng quy tắc nhận diện logic ở trên để xác định số TC cần tách.
+- DẠNG 5: Nhìn vào dòng "1.". Áp dụng quy tắc nhận diện logic ở trên để xác định số TC cần tách.
+- DẠNG 3: Nhìn vào phần "PRECONDITION". Áp dụng quy tắc nhận diện logic ở trên. Phần "Set condition" giữ giống nhau giữa các bản nhân.
+- DẠNG 2: Tách theo từng dòng chứa chữ "then" hoặc "->". Mỗi dòng chứa "then" = 1 Test Case.
+- DẠNG 1: Áp dụng đầy đủ quy tắc nhận diện logic ở trên (OR/|/"one of following" → tách; AND/"following conditions" → giữ nguyên; kết hợp AND+OR → tách theo nhánh OR).
+
+⚠️ QUY TẮC TÁCH KHỐI CHECKSUM/ALIVE (BẮT BUỘC CHO DẠNG 1):
+Nếu gặp cụm từ dạng "One of any CHECKSUM and ALIVE are wrong" hoặc tương tự, đi kèm một danh sách các tín hiệu kỹ thuật nằm trong dấu ngoặc đơn (...), bạn TUYỆT ĐỐI KHÔNG được gộp chung chúng lại. Hãy bóc tách TỪNG tín hiệu xuất hiện trong danh sách đó ra để tạo thành một Test Case riêng biệt (Ví dụ: 1 TC cho tín hiệu Checksum A hỏng, 1 TC cho tín hiệu Alive B hỏng, v.v.).
+
+⚠️ QUY TẮC XỬ LÝ BƯỚC UNSET (BẮT BUỘC CHO MỌI DẠNG):
+Khi thực hiện bước Unset ở cột Action, bạn PHẢI tuân thủ thứ tự ưu tiên sau:
+1. Ưu tiên 1: Nếu cột Conditions_to_clear_warning CÓ DỮ LIỆU, hãy lấy toàn bộ nội dung của các cột này để làm điều kiện cho bước Unset (Không cần quan tâm tín hiệu ở bước Set là gì), có chia các testcase theo các điều kiện AND/OR/One of... tương tự như quy tắc nhân bản testcase
+2. Ưu tiên 2: Nếu cột Conditions_to_clear_warning Trống, hãy đảo ngược tín hiệu vừa được Set ở nhánh Set trước đó (Luật bắt cặp tín hiệu - đặc biệt với Dạng 5&6, hãy lấy điều kiện từ nhánh Unset Condition tương ứng của tín hiệu đó)
+Bắt buộc liệt kê chính xác tên từng tín hiệu và đảo ngược giá trị, không được dùng câu chung chung như "Reset signals to normal state", "N/A"
+Không lặp từ "Set" bên trong bước Unset (Ví dụ sai: Unset: Set signal == 0. Ví dụ đúng: Unset:\n-Signal == 0)
+Nếu Set dùng phép phủ định !=, Unset sẽ chuyển thành phép gán
+⚠️ QUY TẮC BẢO TOÀN LOGIC THỜI GIAN VÀ CHUYỂN TRẠNG THÁI VÀ TRÌNH TỰ THỰC HIỆN (BẮT BUỘC):
+Khi trích xuất nội dung đưa vào cột Action, TUYỆT ĐỐI không được xóa bỏ các thông tin mang tính ràng buộc hệ thống:
+1. Ràng buộc thời gian (Timing): Giữ nguyên vẹn các cụm từ như "within 2s", "for 3s", "delay"... và đặt chúng ở câu lệnh set/unset tương ứng
+Nếu cụm thời gian nằm ở giữa khối điều kiện (ví dụ:...."within 2s since once of following conditions occurs), BẮT BUỘC phải nhặt cụm thời gian này và gắn trực tiếp vào đuôi của từng tín hiệu tương ứng mà cần ràng buộc thời gian này ở tất cả các testcase
+Không được tự sinh ra các dòng văn bản mô tả/ tóm tắt cụm thời gian này.
+2. Ràng buộc chuyển trạng thái:  Giữ nguyên vẹn các cụm từ chỉ sự thay đổi như "change from ... to...", "change to...", "toggle". Tuyệt đối không được chuyển thành dấu "==" nếu tài liệu gốc yêu cầu sự thay đổi ("change")
+3. TRÌNH TỰ THỰC HIỆN (BẮT BUỘC):
+Nếu văn bản gốc có cấu trúc "Tín hiệu A [thời gian] since/after/when Tín hiệu B", thì tín hiệu B là nguyên nhân nên phải xảy ra trước. Khi liệt kê trong bước SET phải đảo vị trí:
+- Viết Tín hiệu nguyên nhân lên trước
+- Viết Tín hiệu phản hồi xuống dòng dưới
+
+###
+[BƯỚC 5 — QUY TẮC ĐIỀN CÁC CỘT OUTPUT (VĂN PHONG CHUẨN TIẾNG ANH)]
+
+── CỘT Test_Purpose ──────────────────────────────────────────────────────────
+Luôn điền thống nhất theo mẫu cấu trúc: "Verify warning {Name}"
+
+── CỘT Pre_Action ────────────────────────────────────────────────────────────
+Điền theo mẫu cố định (Sử dụng \n để xuống dòng ký tự):
+"1. MHU is ON\n2. Timeframe: {Timeframe}"
+Nếu trường Timeframe trống hoặc không có dữ liệu -> Điền: "1. MHU is ON\n2. Timeframe: N/A"
+
+── ĐỊNH NGHĨA KHỐI HIỂN THỊ CẢNH BÁO ĐỘNG ───────────────────────────────────
+Áp dụng cho tất cả các DẠNG. Thay vì điền cứng toàn bộ gạch đầu dòng, chỉ điền những trường CÓ DỮ LIỆU THỰC. Duyệt qua từng trường theo thứ tự sau, nếu trường có giá trị thì thêm dòng tương ứng, nếu TRỐNG thì BỎ QUA hoàn toàn (không để dòng trống):
+
+  Thứ tự | Trường dữ liệu                       | Nhãn hiển thị
+  -------+--------------------------------------+------------------
+    1    | Warning title - EN (New)             | [Warning title:]
+    2    | Warning content - EN (New)           | [Warning content:]
+    3    | Full Warning Content - EN (New)      | [Full warning content:]
+    4    | Warning message icon                 | [Warning message icon:]
+    5    | Telltale_Symbol                      | [Telltale symbol:]
+    6    | Telltale_Behavior                    | [Telltale behavior:]
+    7    | Acoustic                             | [Acoustic:]
+
+Ký hiệu thay thế trong mẫu Expected_Result: {DYNAMIC_DISPLAY_BLOCK}
+Nghĩa là: Điền toàn bộ các dòng nhãn có dữ liệu liên tiếp nhau, ngăn cách bằng \n.
+Nếu TẤT CẢ các trường đều trống: phần sau dấu ";" của dòng "Warning is displayed..." để trống, không thêm bất kỳ ký tự nào.
+
+── CỘT Action & Expected_Result Theo Từng Dạng Phân Loại ──────────────────────
+Quy tắc trình bày nhiều tín hiệu (AND LOGIC):
+Khi một bước trong Action yêu cầu thao tác trên NHIỀU tín hiệu cùng lúc, hãy ngắt mỗi tín hiệu xuống 1 dòng riêng biệt, sử dụng ký tự xuống dòng và gạch đầu dòng (`\n-`).
+Ví dụ:
+"1. Set: \n- Signal_A == 1 \n- Signal_B == 0"
+Áp dụng tương tự cho bước Unset.
+Lưu ý: Mọi bước Unset dưới đây đều ngầm định tuân thủ "Quy tắc xử lý bước Unset" đã định nghĩa ở trước
+
+📌 DẠNG 1 (Trigger thuần túy — Cấu trúc 2 bước):
+- Action:
+  "1. Set {Nhánh trigger lỗi hoặc TỪNG tín hiệu Checksum/Alive riêng lẻ được tách ra, sắp xếp theo đúng trình tự nguyên nhân rồi mới đến phản hồi kèm thời gian, sử dụng ngắt dòng nếu có nhiều tín hiệu} {Nếu tài liệu có quy định thời gian debounce như 'for at least 2s', hãy chuyển đuôi thời gian này ra sau cùng câu Set}\n2. Unset (Theo quy tắc Unset ở trước)"
+- Expected_Result:
+  "1. Warning {Warning_Msg_ID} is displayed in Alerts App, Car Buddy;\n{DYNAMIC_DISPLAY_BLOCK}\n2. Warning {Warning_Msg_ID} is not displayed in Alerts App, Car Buddy anymore"
+
+📌 DẠNG 2 (Trigger + Result nhúng — Cấu trúc 2 bước):
+- Action:
+  "1. Set {Nội dung văn bản nằm phía trước chữ then, đã lọc bỏ chữ chỉ tên xe và câu dẫn rác}\n2. Unset (Theo quy tắc Unset)"
+- Expected_Result:
+  "1. {Nội dung văn bản nằm phía sau chữ then — Giữ nguyên mã icon kỹ thuật và dọn sạch các chữ rác}"
+
+📌 DẠNG 3 (Có Precondition — Cấu trúc 3 bước):
+- Action:
+  "1. Ensure Precondition: {Nội dung phần Precondition}\n2. Set {Nội dung phần Set condition theo đúng trình tự nguyên nhân, phản hồi}\n3. Unset {Nội dung phần Set condition}"
+- Expected_Result:
+  "1. \n2. Warning {Warning_Msg_ID} is displayed in Alerts App, Car Buddy;\n{DYNAMIC_DISPLAY_BLOCK}\n3. Warning {Warning_Msg_ID} is not displayed in Alerts App, Car Buddy anymore"
+  *(Lưu ý bắt buộc: Bước 1 của Expected_Result phải để TRỐNG hoàn toàn, chỉ ghi "1. \n" vì lúc này chưa đủ điều kiện bật lỗi nên màn hình chưa hiển thị cảnh báo).*
+
+📌 DẠNG 4 (Tham chiếu tài liệu — Cấu trúc 2 bước):
+- Action:
+  "1. Follow to: {Nội dung câu tham chiếu tài liệu Set_Requirement gốc}\n"
+- Expected_Result:
+  "1. Warning {Warning_Msg_ID} is displayed in Alerts App, Car Buddy;\n{DYNAMIC_DISPLAY_BLOCK}\n2. Warning {Warning_Msg_ID} is not displayed in Alerts App, Car Buddy anymore"
+
+📌 DẠNG 5 (Kịch bản chia sẵn bước — Cấu trúc 2 bước):
+- Action:
+  "1. Set {Điều kiện kích hoạt của ĐÚNG 1 tín hiệu tương ứng lấy từ dòng số 1, đã lọc bỏ chữ chỉ tên xe, câu dẫn rác và các cụm mô tả logic}\n2. Unset {Điều kiện tắt của ĐÚNG tín hiệu đó lấy từ dòng số 2}"
+- Expected_Result:
+  "1. Warning {Warning_Msg_ID} is displayed in Alerts App, Car Buddy;\n{DYNAMIC_DISPLAY_BLOCK}\n2. Warning {Warning_Msg_ID} is not displayed in Alerts App, Car Buddy anymore"
+
+📌 DẠNG 6 (Kịch bản chia rõ Set/UnSet Condition — Cấu trúc tối đa 3 bước):
+- Action:
+  "1. Ensure Precondition: {Nội dung phần Precondition hoặc phần IF ở đầu - Bỏ qua bước 1 này nếu trường dữ liệu không có Precondition/IF}\n2. Apply Set Condition: {Nội dung nhánh Set Condition tương ứng, đã lọc bỏ chữ chỉ tên xe, câu dẫn rác và các cụm mô tả logic}\n3. Apply UnSet Condition: {Nội dung nhánh UnSet Condition tương ứng được bắt cặp của signal đó}"
+- Expected_Result:
+  "1. \n2. Warning {Warning_Msg_ID} is displayed in Alerts App, Car Buddy;\n{DYNAMIC_DISPLAY_BLOCK}\n3. Warning {Warning_Msg_ID} is not displayed in Alerts App, Car Buddy anymore"
+  *(Lưu ý: Nếu không dính Precondition/IF, Action và Expected_Result tự động giảm xuống cấu trúc 2 bước, đánh số 1. và 2. tương ứng với Apply Set Condition và Apply UnSet Condition).*
+
+📌 DẠNG 7 (Chia theo phiên bản CAN DBC/Mốc thời gian — Cấu trúc 2 bước cố định):
+- Action:
+  "1. Set the signal based on the actual CAN DBC :\n   - [{Tên phiên bản hoặc mốc thời gian 1}]: Set {Tín hiệu tương ứng 1, đã lọc bỏ chữ chỉ tên xe và câu dẫn rác}\n   - [{Tên phiên bản hoặc mốc thời gian 2}]: Set {Tín hiệu tương ứng 2, đã lọc bỏ chữ chỉ tên xe và câu dẫn rác}\n2. Unset the corresponding signal (Tuân thủ quy tắc Unset)"
+- Expected_Result:
+  "1. Warning {Warning_Msg_ID} is displayed in Alerts App, Car Buddy;\n{DYNAMIC_DISPLAY_BLOCK}\n2. Warning {Warning_Msg_ID} is not displayed in Alerts App, Car Buddy anymore"
+
+###
+[BƯỚC 6 — QUY TẮC KIỂM SOÁT VÀ CHỐNG LỖI LOGIC]
+
+1. TUYỆT ĐỐI CHỐNG BỊA ĐẶT DỮ LIỆU: Chỉ điền vào Expected_Result các trường có dữ liệu thực từ input (Title, Content, Full_Content, Icon, Acoustic, Telltale_Symbol, Telltale_Behavior). Tuyệt đối không tự bịa đặt, đoán mò hoặc để lại dòng nhãn trống rỗng không có giá trị.
+2. CHỐNG THIẾU BƯỚC VÀ LỆCH CHỈ MỤC: Số lượng thứ tự dòng (Index: 1., 2., 3.) giữa cột `Action` và cột `Expected_Result` trong cùng một Test Case bắt buộc phải trùng khớp hoàn toàn 100%. Nếu Action kết thúc ở bước "3." thì Expected_Result cũng phải kết thúc ở bước "3.".
+3. KIỂU DỮ LIỆU ĐẦU RA CHUẨN HOÁ: Tất cả giá trị điền vào các trường JSON đều phải có kiểu dữ liệu là chuỗi (String). Tuyệt đối không được trả về giá trị `null`, `NaN` hoặc mảng `Array`. Để xuống dòng văn bản, bắt buộc sử dụng ký hiệu điều khiển vô hình `\n`, không dùng phím Enter xuống dòng vật lý làm rách cấu trúc chuỗi JSON.
+4. LỌC TÍN HIỆU THEO TIÊU ĐỀ NGHIỆP VỤ: Đối chiếu chặt chẽ giữa trường `Name` hoặc `Title` của Requirement với nội dung của `Set_Requirement` để bóc tách tín hiệu chính xác:
+   - Nếu Title/Name quy định về cửa xe (Door): Chỉ bóc tách và xử lý các tín hiệu liên quan đến trạng thái Door.
+   - Nếu Title/Name quy định về cốp xe (Trunk): Chỉ bóc tách và xử lý các tín hiệu liên quan đến trạng thái Trunk.
+   - Nếu Title/Name quy định về nắp capo (Bonnet): Chỉ bóc tách và xử lý các tín hiệu liên quan đến trạng thái Bonnet.
+5. Nếu một requirement bị trống cột Set_Requirement, thì phần Action tương ứng BẮT BUỘC phải để trống, không tự thêm các bước như Set_error mà không có bất kì thông tin nào.
+6. LỌC CÁC CỤM MÔ TẢ LOGIC KHỎI ACTION: Các cụm từ mô tả cấu trúc logic như "one of (the) following condition(s) is/are satisfied", "following conditions are satisfied", "all (of the) following conditions are satisfied" chỉ dùng để xác định cách tách TC, TUYỆT ĐỐI không được xuất hiện trong nội dung cột Action. Chỉ giữ lại các đoạn mã tín hiệu kỹ thuật thuần túy.
+
+###
+[OUTPUT FORMAT — BẮT BUỘC NGHIÊM NGẶT]
+Trả về dữ liệu dưới dạng DUY NHẤT là một JSON Array. Tuyệt đối không viết thêm lời mở đầu, không viết lời giải thích dặn dò ở cuối, không bọc khối mã trong dấu backticks (```json ... ```). Bản thân đầu ra phải là một cấu trúc JSON thuần khiết, sẵn sàng để nạp trực tiếp vào hàm `json.loads()` của Python.
+
+Định dạng Schema mẫu chính xác:
+[
+  {
+    "Task_ID": "string",
+    "test_cases": [
+      {
+        "Test_Purpose": "string",
+        "Name": "string",
+        "Pre_Action": "string",
+        "Action": "string",
+        "Expected_Result": "string",
+        "Program": "string",
+        "Market": "string"
+      }
+    ]
+  }
+]
