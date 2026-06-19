@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from google.genai import types
 from dotenv import load_dotenv
 from google import genai
 
@@ -8,10 +9,10 @@ import data_processing as dp
 import ai_handler as ai
 
 
-RUN_MODE = "FULL"  # "TEST" hoặc "FULL"
+RUN_MODE = "TEST"  # "TEST" hoặc "FULL"
 
 TEST_START_INDEX = 30
-TEST_END_INDEX = 40
+TEST_END_INDEX = 35
 
 if len(sys.argv) > 1:
     INPUT_FILE_PATH = sys.argv[1]
@@ -33,15 +34,25 @@ def get_next_output_file_name(base_name="VFVFWild_NP_TC", extension=".xlsx"):
 OUTPUT_FILE_PATH = get_next_output_file_name()
 
 
+client = genai.Client(
+    api_key="sk-a5TCnYUmvwX9Hoh24gjUVXFn4vuT1R0KBVScwm1Adh7SXwLT",
+    http_options=types.HttpOptions(
+        base_url="https://llm.wokushop.com/v1beta/models/gemini-2.5-flash:generateContent"
+    )
+)
+
+
+
+
 if __name__ == "__main__":
 
-    load_dotenv()
-    api_key = os.getenv("api_anh_tuan")
-    if not api_key:
-        print("Khong tim thay API key")
-        sys.exit(1)
+    # load_dotenv()
+    # api_key = os.getenv("api_anh_tuan")
+    # if not api_key:
+    #     print("Khong tim thay API key")
+    #     sys.exit(1)
         
-    client = genai.Client(api_key=api_key)
+    # client = genai.Client(api_key=api_key)
     
     if not os.path.exists(INPUT_FILE_PATH):
         print(f"Không tìm thấy tệp tin Excel tại: {INPUT_FILE_PATH}")

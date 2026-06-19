@@ -10,7 +10,7 @@ load_dotenv()
 
 # 6NP_8NP: 10419458 # link dưới
 # wild 9302648
-wmc_id = 9302648
+wmc_id = 1346927
 
 base_url = os.getenv("wmc_url")
 wmc_url = f"{base_url}/{wmc_id}/children"
@@ -170,7 +170,7 @@ def resolve_issue_tags(text, item_id):
 
 ### EXPORT
 def export_to_excel(folders_list):
-    output_file = "VFVFWild_NP.xlsx"
+    output_file = "VF5.xlsx"
     excel_rows = []
     
     column_order = [
